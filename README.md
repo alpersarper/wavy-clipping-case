@@ -5,7 +5,7 @@ short-form clips, admins review them, and creators are paid per 1,000 views up
 to the campaign budget.
 
 Stack: Next.js 15 (App Router), TypeScript strict, tRPC v11, Drizzle ORM on
-Postgres, TailwindCSS + shadcn/ui, react-hook-form + Zod, Vitest.
+Postgres, TailwindCSS + shadcn/ui, react-hook-form + Zod, Vitest + Playwright.
 
 ## Setup
 

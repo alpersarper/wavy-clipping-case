@@ -49,8 +49,10 @@ nothing yet.
 So: **the payout is frozen at approval.** Later view growth does not change what
 a campaign owes. A creator's "estimated earnings" stays a live estimate while
 the submission is pending (`estimatedEarningsCents`), and becomes the committed
-amount once approved (`approvedPayoutCents`). Both are returned, so the UI can
-label them honestly.
+amount once approved or paid (`approvedPayoutCents`). A rejected clip earns
+nothing however many views it has, so the creator's list shows no amount for it
+at all rather than the estimate it would have been worth. Both numbers are
+returned, so the UI can label every state honestly.
 
 ### Zero budget, zero payout
 
@@ -216,7 +218,10 @@ design work, no theming, no animation beyond what the primitives ship with.
   survives greyscale and colour vision deficiency.
 - **Forms are the shadcn `Form` wrapper**, which is what wires `id`,
   `aria-describedby` and `aria-invalid` between label, control, hint and error
-  message. Validation errors are announced, not just coloured red.
+  message. Validation errors are announced, not just coloured red. The one
+  control that cannot go through `FormControl` — the platforms checkbox group,
+  which is a fieldset rather than a single input — wires the same ids by hand
+  from `useFormField`, so it announces its error too.
 - **The campaign form validates with `campaignFormSchema` from
   `src/shared/schemas/campaign.ts`** — the same module and the same `cents`,
   title, platform and period rules the tRPC procedure enforces. Only the input
@@ -267,17 +272,19 @@ pnpm test:e2e
 database you are developing against. The global setup creates and migrates it;
 every test reseeds first via the same deterministic `seed()` the CLI uses.
 
-That is what keeps the suite fast (about 25s for 7 tests) and deterministic:
-fixed seed ids, one worker, and not a single `waitForTimeout` — every wait is an
-assertion on what should be on screen.
+That is what keeps the suite fast (a few seconds a test, nine of them) and
+deterministic: fixed seed ids, one worker, and not a single `waitForTimeout` —
+every wait is an assertion on what should be on screen.
 
 Covered: an admin creating a campaign and finding it via server-side search and
 filter; field-level validation refusing an impossible campaign; a creator
 submitting a clip and the same URL being refused the second time; a URL from the
 wrong platform refused inline; approve moving budget spent, budget left and the
 creator's earnings; reject demanding a reason and delivering it to the creator;
-and an over-budget approval surfacing the typed error with the amounts and
-changing nothing.
+an over-budget approval surfacing the typed error with the amounts and changing
+nothing; the earnings column reading differently in each of the four statuses,
+with a rejected clip showing no money at all; and the platforms checkbox group
+announcing its own validation error rather than only colouring it.
 
 ## CI
 
