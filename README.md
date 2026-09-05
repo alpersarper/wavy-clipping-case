@@ -7,12 +7,23 @@ to the campaign budget.
 Stack: Next.js 15 (App Router), TypeScript strict, tRPC v11, Drizzle ORM on
 Postgres, TailwindCSS + shadcn/ui, react-hook-form + Zod, Vitest + Playwright.
 
+- **Live:** <https://wavy-clipping-case.vercel.app>
+- **Design notes, and how concurrent approvals are handled:**
+  [NOTES.md](./NOTES.md)
+- **Run it locally:** `pnpm install && pnpm bootstrap && pnpm dev`
+
 ## Setup
 
 Requires Node 20+, pnpm 10+ and Docker.
 
 ```bash
-pnpm install
+pnpm install && pnpm bootstrap && pnpm dev   # http://localhost:3000
+```
+
+`pnpm bootstrap` is the four steps below in one command. Run them one at a time
+instead if you prefer:
+
+```bash
 cp .env.example .env          # works as-is against the compose Postgres
 docker compose up -d          # Postgres on host port 5433
 pnpm db:migrate               # apply the committed drizzle/ migrations
@@ -28,6 +39,7 @@ Pick a user from the switcher in the header to get a session; start with
 
 | Command | What it does |
 | --- | --- |
+| `pnpm bootstrap` | `.env`, compose Postgres, migrations and seed in one go |
 | `pnpm dev` / `pnpm build` | Next.js dev server / production build |
 | `pnpm db:generate` | Generate a migration from `src/server/db/schema.ts` |
 | `pnpm db:migrate` | Apply the committed migrations |
@@ -66,6 +78,14 @@ order the tests happen to run in.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs lint, typecheck and
 `pnpm test` against a Postgres service container on every push and pull request.
+
+## Deployment
+
+Vercel plus a Neon Postgres, deployed with `vercel deploy --prod`;
+`vercel.json` pins the framework preset and `DATABASE_URL` / `AUTH_SECRET` are
+the only environment variables. Migrating and seeding the hosted database is the
+same commands as local against the production connection string — see
+[NOTES.md](./NOTES.md#deployment).
 
 See [NOTES.md](./NOTES.md) for the design decisions, in particular how
 concurrent approvals and the budget ceiling are handled.
