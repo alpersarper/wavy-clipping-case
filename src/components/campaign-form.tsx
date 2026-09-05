@@ -14,6 +14,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  useFormField,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCents } from "@/shared/payout";
-import { PLATFORM_LABELS, PLATFORMS } from "@/shared/platform";
+import { PLATFORM_LABELS, PLATFORMS, type Platform } from "@/shared/platform";
 import {
   CAMPAIGN_STATUSES,
   campaignFormSchema,
@@ -99,39 +100,11 @@ export function CampaignForm({
           name="platforms"
           render={({ field }) => (
             <FormItem>
-              <fieldset aria-describedby="platforms-description">
-                <legend className="text-sm leading-none font-medium">Platforms</legend>
-                <p
-                  id="platforms-description"
-                  className="mt-1 text-sm text-muted-foreground"
-                >
-                  Clips are only accepted from the platforms you pick here.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-4">
-                  {PLATFORMS.map((platform) => {
-                    const checked = field.value.includes(platform);
-                    return (
-                      <div key={platform} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`platform-${platform}`}
-                          checked={checked}
-                          onCheckedChange={(next) => {
-                            field.onChange(
-                              next === true
-                                ? [...field.value, platform]
-                                : field.value.filter((p) => p !== platform),
-                            );
-                          }}
-                          onBlur={field.onBlur}
-                        />
-                        <Label htmlFor={`platform-${platform}`} className="font-normal">
-                          {PLATFORM_LABELS[platform]}
-                        </Label>
-                      </div>
-                    );
-                  })}
-                </div>
-              </fieldset>
+              <PlatformsFieldset
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+              />
               <FormMessage />
             </FormItem>
           )}
@@ -244,6 +217,61 @@ export function CampaignForm({
         </Button>
       </form>
     </Form>
+  );
+}
+
+/**
+ * The checkbox group is the one control on this form that cannot go through
+ * `FormControl` (it is a fieldset, not a single input), so it wires its own
+ * `aria-describedby` / `aria-invalid` from the same `useFormField` ids.
+ */
+function PlatformsFieldset({
+  value,
+  onChange,
+  onBlur,
+}: {
+  value: Platform[];
+  onChange: (next: Platform[]) => void;
+  onBlur: () => void;
+}) {
+  const { error, formMessageId } = useFormField();
+
+  return (
+    <fieldset
+      aria-describedby={
+        error ? `platforms-description ${formMessageId}` : "platforms-description"
+      }
+      aria-invalid={!!error}
+    >
+      <legend className="text-sm leading-none font-medium">Platforms</legend>
+      <p id="platforms-description" className="mt-1 text-sm text-muted-foreground">
+        Clips are only accepted from the platforms you pick here.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-4">
+        {PLATFORMS.map((platform) => {
+          const checked = value.includes(platform);
+          return (
+            <div key={platform} className="flex items-center gap-2">
+              <Checkbox
+                id={`platform-${platform}`}
+                checked={checked}
+                onCheckedChange={(next) => {
+                  onChange(
+                    next === true
+                      ? [...value, platform]
+                      : value.filter((p) => p !== platform),
+                  );
+                }}
+                onBlur={onBlur}
+              />
+              <Label htmlFor={`platform-${platform}`} className="font-normal">
+                {PLATFORM_LABELS[platform]}
+              </Label>
+            </div>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

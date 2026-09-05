@@ -64,8 +64,8 @@ function MySubmissions() {
         <div>
           <h1 className="text-xl font-semibold">My submissions</h1>
           <p className="text-sm text-muted-foreground">
-            Earnings are an estimate while a clip is pending, and the committed amount
-            once it is approved.
+            Earnings are an estimate while a clip is pending, the committed amount once
+            it is approved or paid, and nothing at all once it is rejected.
           </p>
         </div>
         <div className="grid gap-2">
@@ -173,21 +173,11 @@ function MySubmissions() {
                       {formatViews(item.currentViews)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {item.approvedPayoutCents === null ? (
-                        <>
-                          {formatCents(item.estimatedEarningsCents)}
-                          <span className="block text-xs font-normal text-muted-foreground">
-                            estimated
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          {formatCents(item.approvedPayoutCents)}
-                          <span className="block text-xs font-normal text-muted-foreground">
-                            approved
-                          </span>
-                        </>
-                      )}
+                      <Earnings
+                        status={item.status}
+                        approvedPayoutCents={item.approvedPayoutCents}
+                        estimatedEarningsCents={item.estimatedEarningsCents}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -206,5 +196,47 @@ function MySubmissions() {
         </>
       )}
     </section>
+  );
+}
+
+function Earnings({
+  status,
+  approvedPayoutCents,
+  estimatedEarningsCents,
+}: {
+  status: SubmissionStatus;
+  approvedPayoutCents: number | null;
+  estimatedEarningsCents: number;
+}) {
+  if (status === "rejected") {
+    return (
+      <>
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">No earnings</span>
+        <span className="block text-xs font-normal text-muted-foreground">
+          not earning
+        </span>
+      </>
+    );
+  }
+
+  if (status === "pending" || approvedPayoutCents === null) {
+    return (
+      <>
+        {formatCents(estimatedEarningsCents)}
+        <span className="block text-xs font-normal text-muted-foreground">
+          estimated
+        </span>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {formatCents(approvedPayoutCents)}
+      <span className="block text-xs font-normal text-muted-foreground">
+        {status === "paid" ? "paid" : "approved"}
+      </span>
+    </>
   );
 }
