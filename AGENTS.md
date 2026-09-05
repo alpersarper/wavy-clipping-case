@@ -41,9 +41,19 @@ separate `wavy_test` database it creates on first run. `pnpm test:e2e`
 chromium`; it starts its own `next dev` on port 3100 against a third database,
 `wavy_e2e`, and reseeds before every test — so never point it at `wavy`.
 Migrations under `drizzle/` are generated with `pnpm db:generate` and are
-committed on purpose — reviewers read them. CI
-(`.github/workflows/ci.yml`) runs lint, typecheck and `pnpm test` only. See
+committed on purpose — reviewers read them. `pnpm bootstrap` is the one-command
+local start (note: `pnpm setup` would hit pnpm's own builtin, hence the name).
+CI (`.github/workflows/ci.yml`) runs lint, typecheck and `pnpm test` only. See
 [README.md](./README.md) for the full command table.
+
+Production is Vercel + Neon at <https://wavy-clipping-case.vercel.app>, deployed
+with `vercel deploy --prod` (no GitHub app integration). `vercel.json` pins
+`framework: nextjs` — without it the project preset falls back to "Other" and
+the deploy fails looking for a `public/` output directory. `DATABASE_URL` and
+`AUTH_SECRET` are marked sensitive on the Vercel project, so `vercel env pull`
+returns placeholders; the connection string comes from Neon instead. Migrate,
+seed and ingest the hosted database by pointing the ordinary scripts at that
+`DATABASE_URL` — see [NOTES.md](./NOTES.md#deployment).
 
 ## Maintaining this file
 

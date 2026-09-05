@@ -1,20 +1,58 @@
 # NOTES
 
+## Live demo
+
+<https://wavy-clipping-case.vercel.app>
+
+Next.js on Vercel, Postgres on Neon. Pick a user in the header switcher —
+`admin@wavy.test` for the admin screens, `creator.one@wavy.test` (or `.two`,
+`.three`) for the creator side. The switcher is the whole login story, per case
+4.1; there is no password to ask for.
+
+The data is the committed `pnpm seed` fixture plus `pnpm ingest` run for a
+stretch of consecutive days, so the daily-views chart has real days to draw.
+Those days run a little past the seed date on purpose, so the chart still has a
+right-hand edge if you open the link some days after I sent it. The numbers come
+from the deterministic fake in `src/server/services/ingest.ts`, not a platform
+API. It is a live database, so approving something there really does change it.
+
 ## Setup
 
-See [README.md](./README.md#setup). Short version, on a machine that is not mine:
+Requires Node 20+, pnpm 10+ and Docker. On a machine that is not mine:
 
 ```bash
-pnpm install
-cp .env.example .env
-docker compose up -d
-pnpm db:migrate
-pnpm seed
-pnpm dev        # http://localhost:3000, pick a user in the header switcher
+pnpm install && pnpm bootstrap && pnpm dev
 ```
+
+`pnpm bootstrap` writes `.env` from `.env.example` if you do not have one,
+starts the compose Postgres on host port 5433, applies the committed migrations
+and seeds. Then open <http://localhost:3000> and pick a user in the header
+switcher, starting with `admin@wavy.test`. [README.md](./README.md#setup) has
+the same steps one at a time if you would rather watch them run.
 
 `pnpm test` needs the same container up. It uses a separate `wavy_test`
 database and creates it on first run, so there is nothing extra to provision.
+`pnpm test:e2e` is a third database on the same container; see
+"End-to-end tests" below.
+
+## Deployment
+
+Vercel for the app, Neon for Postgres. `vercel.json` pins the framework preset
+so the deploy does not depend on a dashboard setting, and `DATABASE_URL` and
+`AUTH_SECRET` are the only environment variables — production differs from local
+in nothing else. Deploys are `vercel deploy --prod` from a clean checkout; there
+is no GitHub app wired up, because a take-home does not need one.
+
+Provisioning the hosted database is the same three commands as local, pointed at
+the production connection string:
+
+```bash
+DATABASE_URL=... pnpm db:migrate
+DATABASE_URL=... pnpm seed              # truncates and rewrites, deterministic
+DATABASE_URL=... pnpm ingest 2026-09-06  # one day per run, idempotent
+```
+
+The session cookie picks up `Secure` in production and nothing else changes.
 
 ## Money model
 
@@ -313,24 +351,96 @@ a dev server, and it is the slowest thing here for the least marginal signal.
 | E2E | Playwright against `next dev` and its own `wavy_e2e` database | Reusing the dev database; mocking tRPC in jsdom | Isolation without fixtures, and the tests exercise the layer they exist for |
 | List filters | React state | URL search params | Deep links are not asked for; the pagination that is graded still happens in Postgres |
 
-## WIP — to finish in the next pass
+## What I left out on purpose
 
-> The entries still marked *WIP* below are deliberately incomplete at this
-> point; they get their final wording in the polish pass.
+- **Real auth.** Case 4.1 says not to. The switcher hands out sessions; every
+  procedure still enforces role and ownership on top of whatever it hands out.
+- **Payout execution.** `paid` is a status, not a transfer. There is no money
+  rail in scope, and what is graded is what a campaign *owes*, which is settled
+  at approval. Nothing but the seed moves a submission into `paid`; wiring an
+  admin button for it would be a feature the case does not ask for.
+- **Custom design work, dark mode, animation.** Section 7 says these earn
+  nothing. shadcn/ui defaults throughout.
+- **URL-encoded list filters.** Deep-linking a filtered page would cost a
+  `useSearchParams` Suspense boundary for something not asked for. The
+  pagination, search and filtering that *are* graded still happen in Postgres.
+- **An audit trail beyond `reviewed_by` / `reviewed_at`,** and no soft deletes.
+  A real marketplace wants both; neither changes the money logic being read.
+- **A scheduled ingest.** `pnpm ingest` is run by hand, on the hosted database
+  too. A Vercel cron entry is one line of config, but it is production plumbing
+  rather than part of the flow.
+- **i18n and multi-currency.** Amounts are integer cents formatted as USD.
+- **E2E in CI.** It needs a browser download and a dev server for the least
+  marginal signal; `pnpm test` in CI is the claim that matters.
 
-- **What I left out on purpose** — *WIP.* So far: no real auth, no custom design
-  work, no i18n, no payout *execution* (`paid` is a status an admin sets, not a
-  transfer), no soft deletes, no audit log beyond `reviewed_by` / `reviewed_at`.
-- **First thing I'd fix given another day** — *WIP.*
-- **Where I used AI tooling and what I had to correct** — *WIP.* Corrections so
-  far:
-  - The campaign-status guard ran *before* the budget check, so the admin who
-    lost a race for the last of the budget got "campaign is completed" instead
-    of the typed over-budget error with the amounts. Caught by the concurrency
-    test; the checks are now ordered budget-first.
-  - Duplicate-URL detection tested `error.code === '23505'` on the thrown error,
-    but Drizzle wraps driver errors, so the SQLSTATE is on `error.cause`. The
-    duplicate surfaced as a raw query failure instead of a typed
-    `DUPLICATE_SUBMISSION_URL`. Caught by the dedup test; detection now walks
-    the cause chain.
-- **UI states, accessibility and restraint** — done; see "UI" above.
+## First thing I'd fix given another day
+
+**The review queue can flash an empty state that is not true.**
+`src/components/review-queue.tsx` decides "Nothing to review" from
+`items.length === 0` alone. Approve the last row on page 2 of 2 while ten
+pending rows remain on page 1: the invalidated `{page: 2}` query refetches
+first and returns `{items: [], pageCount: 1}`, so the empty state paints. The
+effect that clamps the page to 1 then runs, but `placeholderData` holds the
+stale empty payload until the page-1 fetch resolves — so an admin is told the
+queue is empty for a full round trip, not a frame. The response already carries
+the tell: branch on the server-echoed `page > pageCount` and render the loading
+state instead.
+
+It goes first because it is the only place I know of where a screen states
+something false. Behind it, both cosmetic:
+
+- the role → links map is written twice (`src/components/app-nav.tsx` and
+  `src/app/page.tsx`), so a new destination can reach the header and miss the
+  landing page;
+- `tests/e2e/review-queue.spec.ts` already walks the rejected row that must
+  never show a dollar amount, but does not assert it, so a regression to the old
+  earnings branch would pass the suite.
+
+## Where I used AI tooling, and what I had to correct
+
+Heavily, and I would rather say so plainly. Claude-based coding agents did most
+of the typing: the scaffold, the first cut of the services and routers, the
+screens, and the bulk of the tests. What I kept for myself is the part that
+decides whether this is any good — the schema, the locking strategy, the payout
+and budget semantics, what goes in and what stays out — and I read and merged
+every pull request myself rather than taking the output on trust. The tests and
+the review gate are there because generated code is confident in exactly the
+places it is wrong.
+
+The corrections worth naming, because each one is a different failure mode:
+
+- **Money logic that was right until it lost a race.** The approval path checked
+  the campaign *status* before the budget, so the admin who lost a race for the
+  last of the budget was told "this campaign is completed" instead of getting
+  the typed `BUDGET_EXCEEDED` error with the amounts the UI needs. Correct
+  ninety-nine times out of a hundred, wrong in the one case the requirement is
+  about. The concurrency test caught it; the checks now run budget-first.
+- **A typed error that silently degraded to an untyped one.** Duplicate-URL
+  detection tested `error.code === "23505"` on the thrown error. Drizzle wraps
+  driver errors, so the SQLSTATE lives on `error.cause` — the check never
+  matched and a duplicate surfaced as a raw query failure instead of
+  `DUPLICATE_SUBMISSION_URL`. The dedup test caught it; detection now walks the
+  cause chain.
+- **Code that contradicted the notes I had just written.** Auto-complete fired
+  for a `total_budget = 0` campaign on its first zero-cost approval, against the
+  zero-budget semantics documented two files away. Caught in review; guarded
+  with `totalBudget > 0` and pinned by a test.
+- **A plausible normalisation that would have refused honest submissions.** The
+  URL normaliser lowercased the whole URL, which would treat two different clips
+  whose YouTube ids or Instagram shortcodes differ only in case as the same
+  clip. It now lowercases the hostname and the TikTok `@handle` only. The
+  related `?v=` rule then took two more rounds to get right — scoped to YouTube
+  hosts, `youtu.be/ID?v=1` still slipped past the unique index, so it is now
+  kept only on `youtube.com/watch`.
+- **UI that disagreed with its own copy.** The creator earnings cell branched on
+  `approvedPayoutCents === null`, conflating pending with rejected, so a
+  rejected clip rendered its rejection reason and "$2.50 estimated" side by
+  side. It now branches on status, and rejected clips show no amount at all.
+
+The pattern I would generalise: the agent is reliable at shape and unreliable at
+the edge case the requirement is actually about, and it is most dangerous when
+it sounds certain. One round removed the `shadcn` package as "unused" — it was
+imported from `globals.css`, so the stylesheet stopped compiling from a clean
+install. Nothing in the diff looked wrong. That is why the money paths are
+covered by tests that fail for the right reason, and why I checked that the
+concurrency test bites by removing `.for("update")` and watching it overspend.
