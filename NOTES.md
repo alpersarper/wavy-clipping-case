@@ -49,8 +49,10 @@ nothing yet.
 So: **the payout is frozen at approval.** Later view growth does not change what
 a campaign owes. A creator's "estimated earnings" stays a live estimate while
 the submission is pending (`estimatedEarningsCents`), and becomes the committed
-amount once approved (`approvedPayoutCents`). Both are returned, so the UI can
-label them honestly.
+amount once approved or paid (`approvedPayoutCents`). A rejected clip earns
+nothing however many views it has, so the creator's list shows no amount for it
+at all rather than the estimate it would have been worth. Both numbers are
+returned, so the UI can label every state honestly.
 
 ### Zero budget, zero payout
 
@@ -198,6 +200,100 @@ the client.
   `tests/integration/campaign-api.test.ts`) — a profile URL is not a post URL,
   and the same clip cannot land on one campaign twice via a tracking parameter.
 
+## UI
+
+Graded on states, accessibility and restraint, so: shadcn/ui defaults, no custom
+design work, no theming, no animation beyond what the primitives ship with.
+
+- **Every list and detail has all three states.** `src/components/states.tsx`
+  holds `LoadingRows` / `LoadingBlock` (skeletons inside a polite live region),
+  `ErrorState` (`role="alert"` plus a retry that re-runs the query) and
+  `EmptyState`, so "loading", "failed" and "nothing here" look and announce the
+  same way on every screen instead of being re-invented per page.
+- **Empty is not the same as filtered-empty.** The campaign list and the
+  submissions list say which one it is and offer the matching action ("Clear
+  filters" versus "New campaign").
+- **Colour is never the only signal.** `CampaignStatusBadge` /
+  `SubmissionStatusBadge` always render an icon *and* the word, so status
+  survives greyscale and colour vision deficiency.
+- **Forms are the shadcn `Form` wrapper**, which is what wires `id`,
+  `aria-describedby` and `aria-invalid` between label, control, hint and error
+  message. Validation errors are announced, not just coloured red. The one
+  control that cannot go through `FormControl` — the platforms checkbox group,
+  which is a fieldset rather than a single input — wires the same ids by hand
+  from `useFormField`, so it announces its error too.
+- **The campaign form validates with `campaignFormSchema` from
+  `src/shared/schemas/campaign.ts`** — the same module and the same `cents`,
+  title, platform and period rules the tRPC procedure enforces. Only the input
+  parsing differs, because `<input type="number">` and `<input type="date">`
+  hand back strings. Same pattern as the existing `submissionFormSchema`.
+- **Typed errors become states, not toasts.** `BUDGET_EXCEEDED` renders the
+  amounts it carries and offers the two things a reviewer can actually do
+  (reject the clip, or raise the budget). `DUPLICATE_SUBMISSION_URL` and
+  `PLATFORM_NOT_ALLOWED` are set on the URL field itself.
+  `BUDGET_BELOW_COMMITTED` sits under the budget input with the amount that is
+  already committed.
+- **Landmarks and keyboard.** Skip link, `header`/`nav`/`main`, `aria-current`
+  on the active nav link, `<section aria-labelledby>` per region, `scope` on
+  table headers and an `sr-only` caption naming the page. Focus rings are the
+  shadcn defaults and are never removed. Row actions carry an `sr-only` suffix
+  (`Approve https://…`) so "Approve" is not ambiguous out of context.
+- **The chart has a text equivalent.** The figure caption states the total and
+  the busiest day, the container is `role="img"` with a summary label, and a
+  `<details>` underneath holds the same numbers as a table.
+- **Money is entered in cents** with a live `= $2.50` hint. Parsing a
+  dollars-and-cents field is the one place a float could reach a payout.
+- **List filters live in React state, not the URL.** Deep-linking a filtered
+  page would be nice, but it costs a `useSearchParams` Suspense boundary for
+  something the case does not ask for. Pagination, search and filtering are
+  still done in Postgres — that is the part being graded.
+- **The dev switcher is in the header on every page**, labelled `DEV` with a
+  screen-reader note that it is not real authentication. Client-side `RoleGate`
+  renders "you are signed in as the wrong role" instead of a wall of failed
+  queries; it is a courtesy, not the access control, which stays server-side.
+
+## New dependencies
+
+| Dependency | Why |
+| --- | --- |
+| `recharts` | The daily views chart. Declarative, ~1 component for a bar chart, and it renders real SVG so the axis labels are text. Hand-rolling SVG would have been more code for a worse tooltip; a full charting suite would have been more weight than one chart deserves. |
+| `@playwright/test` | End-to-end coverage of the journeys that only break when the client, the procedures and Postgres are wired together. Vitest with a DOM shim would mock exactly the layer these tests exist to exercise. |
+
+## End-to-end tests
+
+```bash
+docker compose up -d
+pnpm exec playwright install chromium   # once
+pnpm test:e2e
+```
+
+`playwright.config.ts` starts its own `next dev` on port 3100 and points it at
+`wavy_e2e`, a third database on the same container, so a run never touches the
+database you are developing against. The global setup creates and migrates it;
+every test reseeds first via the same deterministic `seed()` the CLI uses.
+
+That is what keeps the suite fast (a few seconds a test, nine of them) and
+deterministic: fixed seed ids, one worker, and not a single `waitForTimeout` —
+every wait is an assertion on what should be on screen.
+
+Covered: an admin creating a campaign and finding it via server-side search and
+filter; field-level validation refusing an impossible campaign; a creator
+submitting a clip and the same URL being refused the second time; a URL from the
+wrong platform refused inline; approve moving budget spent, budget left and the
+creator's earnings; reject demanding a reason and delivering it to the creator;
+an over-budget approval surfacing the typed error with the amounts and changing
+nothing; the earnings column reading differently in each of the four statuses,
+with a rejected clip showing no money at all; and the platforms checkbox group
+announcing its own validation error rather than only colouring it.
+
+## CI
+
+`.github/workflows/ci.yml` runs `pnpm lint`, `pnpm typecheck` and `pnpm test`
+against a Postgres service container on every push and pull request. No deploy,
+no matrix — the point is that a clean machine can prove the documented setup
+works. The e2e suite is deliberately not in CI: it needs a browser download and
+a dev server, and it is the slowest thing here for the least marginal signal.
+
 ## Decisions
 
 | Decision | Chosen | Rejected | Why |
@@ -213,11 +309,14 @@ the client.
 | Budget edits | Locked check against committed spend | Allowing any budget value | An edit must not retroactively break the payout ceiling |
 | Rejection reason | Zod `min(5)` **and** a DB `CHECK` | Validation only | The constraint holds for the seed and any future code path |
 | RHF/Zod schemas | Shared factory taking the campaign's platforms | Duplicated client and server rules | Client and server disagree the moment they are written twice |
+| Chart | `recharts` bar chart plus a `<details>` data table | Hand-rolled SVG; a charting suite | Real SVG text for axes, and the numbers stay readable without the chart |
+| E2E | Playwright against `next dev` and its own `wavy_e2e` database | Reusing the dev database; mocking tRPC in jsdom | Isolation without fixtures, and the tests exercise the layer they exist for |
+| List filters | React state | URL search params | Deep links are not asked for; the pagination that is graded still happens in Postgres |
 
 ## WIP — to finish in the next pass
 
-> The sections below are deliberately incomplete at this point; the UI work they
-> describe has not been built yet.
+> The entries still marked *WIP* below are deliberately incomplete at this
+> point; they get their final wording in the polish pass.
 
 - **What I left out on purpose** — *WIP.* So far: no real auth, no custom design
   work, no i18n, no payout *execution* (`paid` is a status an admin sets, not a
@@ -234,5 +333,4 @@ the client.
     duplicate surfaced as a raw query failure instead of a typed
     `DUPLICATE_SUBMISSION_URL`. Caught by the dedup test; detection now walks
     the cause chain.
-- **UI states, accessibility and restraint** — *WIP.* The admin and creator
-  screens are a minimal functional shell at this point.
+- **UI states, accessibility and restraint** — done; see "UI" above.

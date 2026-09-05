@@ -5,7 +5,7 @@ short-form clips, admins review them, and creators are paid per 1,000 views up
 to the campaign budget.
 
 Stack: Next.js 15 (App Router), TypeScript strict, tRPC v11, Drizzle ORM on
-Postgres, TailwindCSS + shadcn/ui, react-hook-form + Zod, Vitest.
+Postgres, TailwindCSS + shadcn/ui, react-hook-form + Zod, Vitest + Playwright.
 
 ## Setup
 
@@ -21,7 +21,8 @@ pnpm dev                      # http://localhost:3000
 ```
 
 Pick a user from the switcher in the header to get a session; start with
-`admin@wavy.test`.
+`admin@wavy.test`. Admins get `/admin/campaigns`; creators get
+`/creator/campaigns` and `/creator/submissions`.
 
 ## Commands
 
@@ -34,6 +35,7 @@ Pick a user from the switcher in the header to get a session; start with
 | `pnpm ingest [YYYY-MM-DD]` | Fake a daily metrics sync (idempotent per day) |
 | `pnpm test` | Unit + integration tests |
 | `pnpm test:unit` | Unit tests only (no database needed) |
+| `pnpm test:e2e` | Playwright end-to-end journeys against a dev server |
 | `pnpm typecheck` / `pnpm lint` | `tsc --noEmit` / ESLint |
 
 ## Tests
@@ -46,6 +48,24 @@ in `.env.example` points at it.
 docker compose up -d
 pnpm test
 ```
+
+### End to end
+
+```bash
+docker compose up -d
+pnpm exec playwright install chromium   # once
+pnpm test:e2e
+```
+
+Playwright starts its own `next dev` on port 3100 against `wavy_e2e`, a third
+database on the same container, and reseeds before every test — so a run never
+touches the database you are developing against, and nothing depends on the
+order the tests happen to run in.
+
+## CI
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs lint, typecheck and
+`pnpm test` against a Postgres service container on every push and pull request.
 
 See [NOTES.md](./NOTES.md) for the design decisions, in particular how
 concurrent approvals and the budget ceiling are handled.
