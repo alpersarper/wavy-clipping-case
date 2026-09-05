@@ -154,8 +154,10 @@ export async function approveSubmission(
     const budgetSpentCents = spentCents + payoutCents;
     const budgetRemainingCents = remainingBudgetCents(campaign.totalBudget, budgetSpentCents);
 
-    // 5. A campaign with nothing left to pay out closes itself. Reaching here
-    // means the campaign was still open, so no "already completed" case exists.
+    // 5. A campaign whose positive budget is exhausted closes itself; a
+    // zero-budget campaign never auto-completes (NOTES.md "Zero budget, zero
+    // payout"). Reaching here means the campaign was still open, so no
+    // "already completed" case exists.
     let campaignStatus: ApprovalResult["campaignStatus"] = campaign.status;
     if (campaign.totalBudget > 0 && budgetRemainingCents === 0) {
       campaignStatus = "completed";
