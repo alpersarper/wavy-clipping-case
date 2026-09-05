@@ -64,6 +64,11 @@ label them honestly.
   cheap enough submission could still be paid from it.
 - The over-budget check is `spent + amount > total_budget`. An approval that
   lands exactly on the budget succeeds; the cent past it fails.
+- **Editing a campaign cannot lower `total_budget` below what is already
+  committed** (`BUDGET_BELOW_COMMITTED`). The case does not ask for this, but
+  without it an edit form is a way to retroactively break the one invariant the
+  approval engine exists to hold. The edit takes the same campaign row lock as
+  an approval, so an edit racing an approval sees that approval's spend.
 
 ## Concurrent approvals
 
@@ -205,6 +210,7 @@ the client.
 | Submission platform | Derived server-side from the URL | Taken from client input | One less thing a hand-crafted request can lie about |
 | Daily views series | Per-day new views, `generate_series` left join | Cumulative totals; skipping empty days | An empty day reads as zero, not as a collapse to the axis |
 | Auth | Signed cookie + switcher | Real auth provider | Explicitly out of scope (case 4.1); server still enforces role and ownership |
+| Budget edits | Locked check against committed spend | Allowing any budget value | An edit must not retroactively break the payout ceiling |
 | Rejection reason | Zod `min(5)` **and** a DB `CHECK` | Validation only | The constraint holds for the seed and any future code path |
 | RHF/Zod schemas | Shared factory taking the campaign's platforms | Duplicated client and server rules | Client and server disagree the moment they are written twice |
 

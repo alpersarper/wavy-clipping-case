@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { Database, DbHandle } from "@/server/db";
 import { campaigns, submissions, type CampaignRow } from "@/server/db/schema";
-import { NotFoundError } from "@/shared/errors";
+import { AppError, NotFoundError } from "@/shared/errors";
 import { remainingBudgetCents } from "@/shared/payout";
 import type {
   campaignCreateSchema,
@@ -78,18 +78,57 @@ export async function createCampaign(
   return row;
 }
 
+/**
+ * Edits a campaign.
+ *
+ * Takes the same campaign row lock as an approval, because lowering
+ * `total_budget` below what is already committed would break the one invariant
+ * this whole service exists to hold: a campaign never pays out more than its
+ * budget. An edit racing an approval must see that approval's spend.
+ */
 export async function updateCampaign(
   db: Database,
   input: z.output<typeof campaignUpdateSchema>,
 ): Promise<CampaignRow> {
   const { id, ...values } = input;
-  const [row] = await db
-    .update(campaigns)
-    .set({ ...values, updatedAt: new Date() })
-    .where(eq(campaigns.id, id))
-    .returning();
-  if (!row) throw new NotFoundError("Campaign not found");
-  return row;
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(campaigns)
+      .where(eq(campaigns.id, id))
+      .limit(1)
+      .for("update");
+    if (!existing) throw new NotFoundError("Campaign not found");
+
+    const [spentRow] = await tx
+      .select({
+        spent: sql<number>`coalesce(sum(${submissions.approvedPayoutCents}), 0)::int`,
+      })
+      .from(submissions)
+      .where(
+        and(eq(submissions.campaignId, id), inArray(submissions.status, ["approved", "paid"])),
+      );
+    const committedCents = Number(spentRow?.spent ?? 0);
+
+    if (values.totalBudget < committedCents) {
+      throw new AppError(
+        {
+          code: "BUDGET_BELOW_COMMITTED",
+          committedCents,
+          attemptedBudgetCents: values.totalBudget,
+        },
+        "Budget cannot be lowered below what is already committed to approved submissions",
+      );
+    }
+
+    const [row] = await tx
+      .update(campaigns)
+      .set({ ...values, updatedAt: new Date() })
+      .where(eq(campaigns.id, id))
+      .returning();
+    return row;
+  });
 }
 
 export type CampaignOverview = {

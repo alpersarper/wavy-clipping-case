@@ -134,6 +134,49 @@ describe("campaign overview series", () => {
   });
 });
 
+describe("editing a campaign", () => {
+  it("refuses to lower the budget below what is already committed", async () => {
+    const reviewer = await admin();
+    const author = await creator();
+    const campaign = await makeCampaign(db, { payoutPer1kViews: 100, totalBudget: 10_000 });
+    const submission = await makeSubmission(db, {
+      campaignId: campaign.id,
+      creatorId: author.id,
+      views: 30_000,
+    });
+    await approveSubmission(db, { submissionId: submission.id, reviewerId: reviewer.id });
+
+    const edit = {
+      id: campaign.id,
+      title: campaign.title,
+      platforms: campaign.platforms,
+      payoutPer1kViews: campaign.payoutPer1kViews,
+      status: campaign.status,
+      startsAt: campaign.startsAt,
+      endsAt: campaign.endsAt,
+    };
+
+    const error = await callerFor(reviewer)
+      .campaign.update({ ...edit, totalBudget: 2_000 })
+      .catch((e: unknown) => e);
+
+    expect((error as { cause: AppError }).cause).toBeInstanceOf(AppError);
+    expect((error as { cause: AppError }).cause.payload).toMatchObject({
+      code: "BUDGET_BELOW_COMMITTED",
+      committedCents: 3_000,
+      attemptedBudgetCents: 2_000,
+    });
+
+    // Untouched, and lowering to exactly the committed amount is fine.
+    const overview = await getCampaignOverview(db, campaign.id);
+    expect(overview.campaign.totalBudget).toBe(10_000);
+
+    await expect(
+      callerFor(reviewer).campaign.update({ ...edit, totalBudget: 3_000 }),
+    ).resolves.toMatchObject({ totalBudget: 3_000 });
+  });
+});
+
 describe("creating a submission", () => {
   it("accepts a post URL on one of the campaign's platforms", async () => {
     const author = await creator();

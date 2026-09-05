@@ -6,6 +6,7 @@
  * without string-matching a message.
  */
 export const APP_ERROR_CODES = [
+  "BUDGET_BELOW_COMMITTED",
   "BUDGET_EXCEEDED",
   "CAMPAIGN_NOT_ACCEPTING_SUBMISSIONS",
   "CAMPAIGN_NOT_ACCEPTING_REVIEW",
@@ -17,6 +18,12 @@ export const APP_ERROR_CODES = [
 export type AppErrorCode = (typeof APP_ERROR_CODES)[number];
 
 export type AppErrorDetails = {
+  BUDGET_BELOW_COMMITTED: {
+    /** Cents already committed to approved submissions. */
+    committedCents: number;
+    /** The new budget that was rejected. */
+    attemptedBudgetCents: number;
+  };
   BUDGET_EXCEEDED: {
     /** Cents this approval would have committed. */
     requiredCents: number;
