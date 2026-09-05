@@ -50,11 +50,14 @@ export function normalizePostUrl(url: string): string {
     return trimmed;
   }
   parsed.hash = "";
-  parsed.search = parsed.searchParams.has("v")
-    ? `?v=${parsed.searchParams.get("v")}`
-    : "";
   parsed.hostname = parsed.hostname.replace(/^(?:www|m)\./i, "").toLowerCase();
   parsed.protocol = "https:";
+  const isYouTubeHost =
+    parsed.hostname === "youtube.com" || parsed.hostname === "youtu.be";
+  parsed.search =
+    isYouTubeHost && parsed.searchParams.has("v")
+      ? `?v=${parsed.searchParams.get("v")}`
+      : "";
   const path = parsed.pathname
     .replace(/\/+$/, "")
     .replace(/^\/@[^/]+/, (handle) => handle.toLowerCase());

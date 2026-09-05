@@ -254,6 +254,23 @@ describe("creating a submission", () => {
     ).resolves.toMatchObject({ campaignId: second.id });
   });
 
+  it("refuses the same clip dressed up with a junk v param", async () => {
+    const author = await creator();
+    const campaign = await makeCampaign(db, { platforms: ["tiktok"] });
+    const url = "https://www.tiktok.com/@someone/video/7301234567890123456";
+
+    await callerFor(author).submission.create({ campaignId: campaign.id, postUrl: url });
+
+    const error = await callerFor(author)
+      .submission.create({ campaignId: campaign.id, postUrl: `${url}?v=1` })
+      .catch((e: unknown) => e);
+
+    expect((error as { cause: AppError }).cause).toBeInstanceOf(AppError);
+    expect((error as { cause: AppError }).cause.payload).toMatchObject({
+      code: "DUPLICATE_SUBMISSION_URL",
+    });
+  });
+
   it("refuses submissions to a campaign that is not active", async () => {
     const author = await creator();
     for (const status of ["draft", "paused", "completed"] as const) {

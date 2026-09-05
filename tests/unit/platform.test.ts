@@ -33,11 +33,20 @@ describe("normalizePostUrl", () => {
     expect(normalizePostUrl("https://www.tiktok.com/@A/video/7301234567890123456#top")).toBe(
       canonical,
     );
+    expect(normalizePostUrl("https://www.tiktok.com/@a/video/7301234567890123456?v=1")).toBe(
+      canonical,
+    );
   });
 
   it("keeps the YouTube video id, which is the only meaningful query param", () => {
     expect(normalizePostUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42")).toBe(
       "https://youtube.com/watch?v=dQw4w9WgXcQ",
+    );
+  });
+
+  it("drops a v param on hosts where it means nothing", () => {
+    expect(normalizePostUrl("https://www.instagram.com/reel/CxAbCdEfGh1/?v=1")).toBe(
+      normalizePostUrl("https://www.instagram.com/reel/CxAbCdEfGh1/"),
     );
   });
 
