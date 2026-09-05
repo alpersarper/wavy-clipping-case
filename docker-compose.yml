@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: wavy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wavy
+      POSTGRES_PASSWORD: wavy
+      POSTGRES_DB: wavy
+    ports:
+      # 5433 on the host so this never fights a locally installed Postgres.
+      - "5433:5432"
+    volumes:
+      - wavy-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wavy -d wavy"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  wavy-pgdata:
