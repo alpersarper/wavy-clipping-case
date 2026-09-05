@@ -308,8 +308,8 @@ a dev server, and it is the slowest thing here for the least marginal signal.
 
 ## WIP — to finish in the next pass
 
-> The sections below are deliberately incomplete at this point; the UI work they
-> describe has not been built yet.
+> The entries still marked *WIP* below are deliberately incomplete at this
+> point; they get their final wording in the polish pass.
 
 - **What I left out on purpose** — *WIP.* So far: no real auth, no custom design
   work, no i18n, no payout *execution* (`paid` is a status an admin sets, not a

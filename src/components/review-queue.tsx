@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Pagination } from "@/components/pagination";
 import { RejectDialog } from "@/components/reject-dialog";
@@ -44,6 +44,13 @@ export function ReviewQueue({ campaignId }: { campaignId: string }) {
     { campaignId, page, pageSize: PAGE_SIZE },
     { placeholderData: (prev) => prev },
   );
+
+  const pageCount = queue.data?.pageCount;
+  useEffect(() => {
+    if (pageCount !== undefined && page > pageCount) {
+      setPage(pageCount);
+    }
+  }, [page, pageCount]);
 
   async function refresh() {
     await Promise.all([
@@ -187,6 +194,7 @@ export function ReviewQueue({ campaignId }: { campaignId: string }) {
                           disabled={busyId !== null}
                           onClick={() => {
                             setBusyId(item.id);
+                            reject.reset();
                             approve.mutate({ submissionId: item.id });
                           }}
                         >
@@ -235,6 +243,7 @@ export function ReviewQueue({ campaignId }: { campaignId: string }) {
         onConfirm={(reason) => {
           if (!rejecting) return;
           setBusyId(rejecting.id);
+          approve.reset();
           reject.mutate({ submissionId: rejecting.id, reason });
         }}
       />
