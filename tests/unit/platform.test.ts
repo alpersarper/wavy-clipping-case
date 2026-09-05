@@ -42,11 +42,20 @@ describe("normalizePostUrl", () => {
     expect(normalizePostUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42")).toBe(
       "https://youtube.com/watch?v=dQw4w9WgXcQ",
     );
+    expect(normalizePostUrl("https://www.youtube.com/watch/?v=dQw4w9WgXcQ")).toBe(
+      "https://youtube.com/watch?v=dQw4w9WgXcQ",
+    );
   });
 
-  it("drops a v param on hosts where it means nothing", () => {
+  it("drops a v param on shapes where the id lives in the path", () => {
     expect(normalizePostUrl("https://www.instagram.com/reel/CxAbCdEfGh1/?v=1")).toBe(
       normalizePostUrl("https://www.instagram.com/reel/CxAbCdEfGh1/"),
+    );
+    expect(normalizePostUrl("https://youtu.be/dQw4w9WgXcQ?v=1")).toBe(
+      normalizePostUrl("https://youtu.be/dQw4w9WgXcQ"),
+    );
+    expect(normalizePostUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ?v=1")).toBe(
+      normalizePostUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ"),
     );
   });
 

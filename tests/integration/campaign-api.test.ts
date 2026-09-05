@@ -271,6 +271,27 @@ describe("creating a submission", () => {
     });
   });
 
+  it("refuses a junk v param on YouTube URLs whose id lives in the path", async () => {
+    const author = await creator();
+    const campaign = await makeCampaign(db, { platforms: ["youtube"] });
+
+    for (const url of [
+      "https://youtu.be/dQw4w9WgXcQ",
+      "https://www.youtube.com/shorts/aBcDeFgHiJk",
+    ]) {
+      await callerFor(author).submission.create({ campaignId: campaign.id, postUrl: url });
+
+      const error = await callerFor(author)
+        .submission.create({ campaignId: campaign.id, postUrl: `${url}?v=1` })
+        .catch((e: unknown) => e);
+
+      expect((error as { cause: AppError }).cause).toBeInstanceOf(AppError);
+      expect((error as { cause: AppError }).cause.payload).toMatchObject({
+        code: "DUPLICATE_SUBMISSION_URL",
+      });
+    }
+  });
+
   it("refuses submissions to a campaign that is not active", async () => {
     const author = await creator();
     for (const status of ["draft", "paused", "completed"] as const) {
