@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 
 import type { Database } from "@/server/db";
 import { submissionMetrics, submissions } from "@/server/db/schema";
@@ -99,7 +99,9 @@ export async function runIngest(
           comments: submissionMetrics.comments,
         })
         .from(submissionMetrics)
-        .where(eq(submissionMetrics.submissionId, id))
+        .where(
+          and(eq(submissionMetrics.submissionId, id), lt(submissionMetrics.capturedAt, day)),
+        )
         .orderBy(desc(submissionMetrics.capturedAt))
         .limit(1);
 

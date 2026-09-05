@@ -37,13 +37,26 @@ describe("normalizePostUrl", () => {
 
   it("keeps the YouTube video id, which is the only meaningful query param", () => {
     expect(normalizePostUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42")).toBe(
-      "https://youtube.com/watch?v=dqw4w9wgxcq",
+      "https://youtube.com/watch?v=dQw4w9WgXcQ",
     );
   });
 
   it("distinguishes different posts", () => {
     expect(normalizePostUrl("https://www.tiktok.com/@a/video/1111111111111111111")).not.toBe(
       normalizePostUrl("https://www.tiktok.com/@a/video/2222222222222222222"),
+    );
+  });
+
+  it("keeps case-sensitive video ids apart", () => {
+    // YouTube ids are case-sensitive: these are two different videos.
+    expect(normalizePostUrl("https://youtu.be/AbCdEfGhIjK")).not.toBe(
+      normalizePostUrl("https://youtu.be/abcdefghijk"),
+    );
+    expect(normalizePostUrl("https://www.youtube.com/watch?v=AbCdEfGhIjK")).not.toBe(
+      normalizePostUrl("https://www.youtube.com/watch?v=abcdefghijk"),
+    );
+    expect(normalizePostUrl("https://www.instagram.com/reel/CxAbCdEfGh1/")).not.toBe(
+      normalizePostUrl("https://www.instagram.com/reel/cxabcdefgh1/"),
     );
   });
 });

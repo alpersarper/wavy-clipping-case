@@ -36,6 +36,10 @@ export function detectPlatform(url: string): Platform | null {
  *
  * Without this, `?utm_source=x` or a trailing slash would be enough to submit
  * the same clip twice, so normalisation happens before the unique index sees it.
+ *
+ * Only the hostname and the TikTok `@handle` segment are case-folded. YouTube
+ * video ids and Instagram shortcodes are case-sensitive, so folding the rest of
+ * the path or the `v` param would collapse genuinely different posts.
  */
 export function normalizePostUrl(url: string): string {
   const trimmed = url.trim();
@@ -43,7 +47,7 @@ export function normalizePostUrl(url: string): string {
   try {
     parsed = new URL(trimmed);
   } catch {
-    return trimmed.toLowerCase();
+    return trimmed;
   }
   parsed.hash = "";
   parsed.search = parsed.searchParams.has("v")
@@ -51,6 +55,8 @@ export function normalizePostUrl(url: string): string {
     : "";
   parsed.hostname = parsed.hostname.replace(/^(?:www|m)\./i, "").toLowerCase();
   parsed.protocol = "https:";
-  const path = parsed.pathname.replace(/\/+$/, "");
-  return `${parsed.protocol}//${parsed.hostname}${path}${parsed.search}`.toLowerCase();
+  const path = parsed.pathname
+    .replace(/\/+$/, "")
+    .replace(/^\/@[^/]+/, (handle) => handle.toLowerCase());
+  return `${parsed.protocol}//${parsed.hostname}${path}${parsed.search}`;
 }

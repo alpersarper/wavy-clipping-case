@@ -157,7 +157,7 @@ export async function approveSubmission(
     // 5. A campaign with nothing left to pay out closes itself. Reaching here
     // means the campaign was still open, so no "already completed" case exists.
     let campaignStatus: ApprovalResult["campaignStatus"] = campaign.status;
-    if (budgetRemainingCents === 0) {
+    if (campaign.totalBudget > 0 && budgetRemainingCents === 0) {
       campaignStatus = "completed";
       await tx
         .update(campaigns)

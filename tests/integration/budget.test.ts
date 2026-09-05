@@ -205,6 +205,34 @@ describe("budget ceiling", () => {
     expect(await statusOf(campaign.id)).toBe("active");
   });
 
+  it("keeps a zero-budget campaign open: approvals commit at zero and never complete it", async () => {
+    const admin = await makeUser(db, "admin");
+    const creator = await makeUser(db, "creator");
+    const campaign = await makeCampaign(db, { payoutPer1kViews: 100, totalBudget: 0 });
+
+    const first = await makeSubmission(db, {
+      campaignId: campaign.id,
+      creatorId: creator.id,
+      views: 500,
+    });
+    const result = await approveSubmission(db, { submissionId: first.id, reviewerId: admin.id });
+    expect(result.payoutCents).toBe(0);
+    expect(result.campaignStatus).toBe("active");
+    expect(await statusOf(campaign.id)).toBe("active");
+
+    // Still accepting review after the first zero-cost approval.
+    const second = await makeSubmission(db, {
+      campaignId: campaign.id,
+      creatorId: creator.id,
+      views: 900,
+    });
+    expect(
+      (await approveSubmission(db, { submissionId: second.id, reviewerId: admin.id })).payoutCents,
+    ).toBe(0);
+    expect(await spentCents(campaign.id)).toBe(0);
+    expect(await statusOf(campaign.id)).toBe("active");
+  });
+
   it("keeps the overview in step with the ledger", async () => {
     const admin = await makeUser(db, "admin");
     const creator = await makeUser(db, "creator");

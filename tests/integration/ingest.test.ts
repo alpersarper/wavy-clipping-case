@@ -77,6 +77,26 @@ describe("metrics ingestion", () => {
     expect(views[2]).toBeGreaterThan(views[1]);
   });
 
+  it("backfills an earlier day without treating a later snapshot as its baseline", async () => {
+    const creator = await makeUser(db, "creator");
+    const campaign = await makeCampaign(db);
+    const submission = await makeSubmission(db, {
+      campaignId: campaign.id,
+      creatorId: creator.id,
+    });
+
+    const later: MetricSource = () => ({ views: 50_000, likes: 3_000, comments: 300 });
+    await runIngest(db, { day: "2026-02-05", source: later });
+
+    // The default source grows from the previous snapshot; with no earlier row
+    // the backfilled day must start from zero, not from the 02-05 numbers.
+    await runIngest(db, { day: "2026-02-01" });
+
+    const rows = await metricsFor(submission.id);
+    expect(rows.map((r) => r.capturedAt)).toEqual(["2026-02-01", "2026-02-05"]);
+    expect(rows[0].views).toBeLessThan(rows[1].views);
+  });
+
   it("finishes the run when one submission blows up, and reports the failure", async () => {
     const creator = await makeUser(db, "creator");
     const campaign = await makeCampaign(db);
