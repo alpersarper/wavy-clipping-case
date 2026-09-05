@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { detectPlatform, type Platform } from "@/shared/platform";
+import { detectPlatform, PLATFORM_LABELS, type Platform } from "@/shared/platform";
 
 export const SUBMISSION_STATUSES = [
   "pending",
@@ -41,7 +41,11 @@ export function submissionFormSchema(allowed: readonly Platform[]) {
         const platform = detectPlatform(url);
         return platform !== null && allowed.includes(platform);
       },
-      { message: `This campaign only accepts: ${allowed.join(", ")}` },
+      {
+        message: `This campaign only accepts ${allowed
+          .map((p) => PLATFORM_LABELS[p])
+          .join(" and ")} post URLs`,
+      },
     ),
   });
 }
@@ -62,14 +66,21 @@ export const submissionApproveSchema = z.object({
   submissionId: z.uuid(),
 });
 
+/** Rejecting always requires a reason -- enforced here and by a CHECK constraint. */
+export const rejectionReasonSchema = z
+  .string()
+  .trim()
+  .min(5, "Give the creator a usable reason (at least 5 characters)")
+  .max(500, "Keep the reason under 500 characters");
+
 export const submissionRejectSchema = z.object({
   submissionId: z.uuid(),
-  /** Rejecting always requires a reason -- enforced here and by a CHECK constraint. */
-  reason: z
-    .string()
-    .trim()
-    .min(5, "Give the creator a usable reason (at least 5 characters)")
-    .max(500),
+  reason: rejectionReasonSchema,
 });
+
+/** What the reject dialog binds to; the same rule the procedure enforces. */
+export const rejectFormSchema = z.object({ reason: rejectionReasonSchema });
+
+export type RejectFormValues = z.output<typeof rejectFormSchema>;
 
 export const submissionIdSchema = z.object({ id: z.uuid() });
